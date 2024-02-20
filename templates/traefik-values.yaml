@@ -1,0 +1,56 @@
+dashboard:
+  enabled: true
+  domain: traefik.{{ .Domain }}
+hub:
+  enabled: true
+serversTransport:
+  insecureSkipVerify: true
+ssl:
+  enabled: true
+  enforced: true
+  permanentRedirect: true
+  generateTLS: true
+  defaultCN: "*.{{ .Domain }}"
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+providers:
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: true
+    allowExternalNameService: true
+    allowEmptyServices: true
+    namespaces: []
+  kubernetesIngress:
+    enabled: true
+    allowCrossNamespace: true
+    allowExternalNameService: true
+    allowEmptyServices: true
+    namespaces: []
+    publishedService:
+      enabled: true
+logs:
+  general:
+    level: DEBUG
+  access:
+    enabled: true
+    filters: {}
+    fields:
+      general:
+        defaultmode: keep
+        names: {}
+        headers:
+          defaultmode: drop
+          names: {}
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints:
+      - "traefik"
+      - "web"
+      - "websecure"
+    matchRule: 'Host(`traefik.{{ .Domain }}`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))'
+tlsStore:
+  default:
+    defaultCertificate:
+      secretName: traefik-{{ .Domain }}-tls

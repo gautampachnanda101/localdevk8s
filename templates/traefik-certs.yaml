@@ -1,0 +1,37 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: traefik-{{ .Domain }}
+  namespace: traefik
+spec:
+  commonName: "traefik.{{ .Domain }}"
+  dnsNames:
+    - "traefik.{{ .Domain }}"
+  duration: 2190h0m0s
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: zerossl-issuer
+  renewBefore: 168h0m0s
+  secretName: traefik-{{ .Domain }}-tls
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: traefik.traefik-internal
+  namespace: traefik
+spec:
+  commonName: "*.svc.cluster.local"
+  secretName: "traefik.traefik-internal"
+  dnsNames:
+    - traefik
+    - traefik.traefik
+    - traefik.traefik.svc
+    - traefik.traefik.svc.cluster.local
+    - '*.svc.cluster.local'
+  duration: 12h0m0s
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: zerossl-issuer
+  renewBefore: 1h5m0s

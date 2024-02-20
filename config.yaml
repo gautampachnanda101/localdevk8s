@@ -1,0 +1,107 @@
+
+cluster:
+  domain: localhost
+  name: local-dev
+  nodes: 1
+k8s:
+  version: "v1.25.0"
+  provider: minikube
+clean: |
+  colima list | awk '{print $1}' | grep -v 'PROFILE' | xargs colima stop --force --profile || true
+  colima list | awk '{print $1}' | grep -v 'PROFILE' | xargs colima delete --force --profile || true
+  rm -rf ~/.lima ~/.colima || true
+  ctlptl delete registry ctlptl-registry --cascade || true
+  echo "Pruning old tunnels, when prompted for password please use your ${BRed}admin/sudo password.${Color_Off} if prompted"
+  TUNNELS=$(ps -eaf | grep 'minikube' | grep 'tunnel' | grep -v 'grep' | grep -c 'tunnel'); if [ $TUNNELS -gt 0 ]; then echo "Found $TUNNELS minikube tunnels"; fi
+  ps -eaf | grep 'minikube' | grep 'tunnel' | grep -v 'grep' | awk '{print $2}' | sudo xargs kill  || true
+  ps -eaf | grep 'minikube' | grep 'dashboard' | grep -v 'grep' | awk '{print $2}' | sudo xargs kill  || true
+  TUNNELS=$(ps -eaf | grep 'minikube' | grep -c 'tunnel'); if [ $TUNNELS -gt 0 ]; then echo "Found $TUNNELS minikube tunnels";fi
+  minikube stop --all || true
+  minikube delete --all --purge || true
+  echo "Pruning docker"
+  docker system prune -f --all
+  sudo brew services stop chipmk/tap/docker-mac-net-connect || true
+certsSetup: |
+  brew install mkcert || true
+  mkdir -p certs
+  sudo mkcert -uninstall || true
+  echo "Setting up certs for domain: $CLUSTER_DOMAIN"
+  sudo mkcert -install -cert-file certs/mkcert.pem -key-file certs/mkcert-key.pem "$CLUSTER_DOMAIN" 127.0.0.1 ::1
+  echo "Setting up certs"
+  sudo kubectl -n kube-system create secret tls mkcert --key certs/mkcert-key.pem --cert certs/mkcert.pem
+  echo "use kube-system/mkcert for ingress cert"
+  kubectl create namespace cert-manager
+  CA_PATH=$(mkcert -CAROOT);echo $CA_PATH;sudo kubectl -n cert-manager create secret tls zerossl-ca-root --key "$CA_PATH/rootCA-key.pem" --cert "$CA_PATH/rootCA.pem"
+  sudo kubectl -n cert-manager create secret tls zerossl-ca --key certs/mkcert-key.pem --cert certs/mkcert.pem
+  echo "Adding and configuring cert manager"
+  helm repo add jetstack https://charts.jetstack.io --force-update
+  helm repo update
+  echo "Installing cert manager"
+  helm install cert-manager jetstack/cert-manager --namespace cert-manager --version v1.12.0 --set installCRDs=true
+  kubectl rollout status -w deployment/cert-manager -n cert-manager
+  kubectl apply -f ./parsed/cluster-issuer.yaml --namespace cert-manager
+  kubectl rollout restart deployment/cert-manager -n cert-manager
+  kubectl rollout status -w deployment/cert-manager -n cert-manager
+  kubectl get Issuer,ClusterIssuer,Certificates,CertificateRequests,Orders,Challenges --all-namespaces
+  brew install cmctl || cmctl check api
+  kubectl create namespace traefik || true
+  sudo kubectl -n traefik create secret tls zerossl-ca --key certs/mkcert-key.pem --cert certs/mkcert.pem
+  sudo kubectl -n kube-system create secret tls zerossl-ca --key certs/mkcert-key.pem --cert certs/mkcert.pem
+  minikube -p $CLUSTER_NAME addons list
+  minikube -p $CLUSTER_NAME addons enable ingress || true
+  minikube -p $CLUSTER_NAME addons disable ingress || true
+  minikube -p $CLUSTER_NAME addons enable ingress || true
+  minikube -p $CLUSTER_NAME addons enable ingress-dns || true
+  minikube -p $CLUSTER_NAME addons enable dashboard || true
+  minikube -p $CLUSTER_NAME addons list
+helmInstall: |
+  echo "Installing helm charts"
+  helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+  helm repo add argo-cd https://argoproj.github.io/argo-helm --force-update
+  helm repo update
+  echo "Installing gitea"
+  helm install gitea gitea-charts/gitea --create-namespace --namespace gitea
+  helm dep update charts/argo-cd/
+  helm repo add gitea-charts https://dl.gitea.com/charts/ --force-update
+colima:
+  installCluster: |
+    colima list | awk '{print $1}' | grep -v 'PROFILE' | xargs colima stop --force --profile || true
+    colima list | awk '{print $1}' | grep -v 'PROFILE' | xargs colima delete --force --profile || true
+    rm -rf ~/.lima ~/.colima || true
+    echo "colima start --profile $CLUSTER_NAME --kubernetes --cpu 4 --memory 8 --disk 100 --dns 1.1.1.1 --dns 8.8.8.8 --activate"
+    colima start --profile $CLUSTER_NAME --kubernetes --cpu 4 --memory 8 --disk 100 --dns 1.1.1.1 --dns 8.8.8.8 --activate
+    colima list --profile $CLUSTER_NAME
+  testCluster: |
+    echo "Configuring cluster test app"
+    kubectl create namespace test-app
+    kubectl apply -f ./parsed/test-app.yaml
+    sudo rm -rf /etc/resolver/minikube-$CLUSTER_DOMAIN || true
+    cat ./parsed/parsedResolver.yaml
+    sudo rm /etc/resolver/minikube-*
+    sudo cp ./parsed/parsedResolver.yaml /etc/resolver/minikube-$CLUSTER_DOMAIN
+    sudo cat /etc/resolver/minikube-$CLUSTER_DOMAIN
+    MIP=$(minikube ip -p gautam);nslookup hello-john.$CLUSTER_DOMAIN $MIP
+    curl "hello-john.$CLUSTER_DOMAIN"
+minikube:
+  installCluster: |
+    echo "Installing minikube"
+    ctlptl delete cluster $CLUSTER_NAME --cascade true || true
+    minikube delete --purge --all || true
+    ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--base-image=gcr.io/k8s-minikube/kicbase-builds:v0.0.42-1703092832-17830,--nodes=$CLUSTER_NODES,--kubernetes-version=$K8S_VERSION,--driver=docker,--install-addons=true,--addons=ingress,ingress-dns,registry,metrics-server,dashboard" --registry=ctlptl-registry
+    minikube -p $CLUSTER_NAME addons list
+    minikube -p $CLUSTER_NAME addons enable ingress || true
+    brew install chipmk/tap/docker-mac-net-connect || true
+    sudo brew services start chipmk/tap/docker-mac-net-connect || true
+    sudo brew services
+  testCluster: |
+    echo "Configuring cluster test app"
+    kubectl create namespace test-app              
+    kubectl apply -f ./parsed/test-app.yaml -n test-app
+    kubectl get all -n test-app
+    sudo rm /etc/resolver/minikube-* || true
+    sudo cp ./parsed/parsedResolver.yaml /etc/resolver/minikube-$CLUSTER_DOMAIN
+    sudo cat /etc/resolver/minikube-$CLUSTER_DOMAIN
+    sudo brew services restart chipmk/tap/docker-mac-net-connect || true
+    sudo brew services
+    MIP=$(minikube ip -p $CLUSTER_NAME);nslookup hello-john.$CLUSTER_DOMAIN $MIP
+    curl "hello-john.$CLUSTER_DOMAIN" || true

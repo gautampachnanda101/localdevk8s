@@ -1,0 +1,32 @@
+kind: ClusterIssuer
+metadata:
+  name: zerossl-issuer
+spec:
+  spec:
+    ca:
+      secretName: zerossl-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: zerossl-ca
+  namespace: cert-manager
+spec:
+  ca:
+    secretName: zerossl-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dev-local
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: dev-local
+  secretName: zerossl-ca
+  dnsNames:
+    - $domain
+  issuerRef:
+    name: zerossl-issuer
+    kind: ClusterIssuer
+    group: cer-manager.io

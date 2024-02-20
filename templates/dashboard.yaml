@@ -1,0 +1,43 @@
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+spec:
+  commonName: kubernetes-dashboard.{{ .Domain }}
+  dnsNames:
+    - kubernetes-dashboard.{{ .Domain }}
+  duration: 2190h0m0s
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: zerossl-issuer
+  renewBefore: 168h0m0s
+  secretName: "kubernetes-dashboard.{{ .Domain }}-cert"
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: kubernetes-dashboard.{{ .Domain }}
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - kubernetes-dashboard.{{ .Domain }}
+      secretName: "kubernetes-dashboard.{{ .Domain }}-cert"
+  rules:
+    - host: kubernetes-dashboard.{{ .Domain }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-dashboard
+                port:
+                  number: 80
