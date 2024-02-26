@@ -152,3 +152,4 @@ zsdoc/data
 certs/*.pem
 parsed/*
 setup
+charts/.DS_Store
