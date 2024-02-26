@@ -1,6 +1,6 @@
 build:
 	go build .
-clean-install: clean install-local-k8s
+clean-install: clean build install-local-k8s
 install-local-k8s: build
 	./setup
 clean:

@@ -26,11 +26,17 @@ var helmInstall = ""
 var certsSetup = ""
 var clusterNodes = "0"
 var k8sVersion="v1.25.0"
+var clusterCpu = "2g"
+var clusterMemory = "4g"
+var clusterDisk = "10000mb"
 type Config struct {
 	Cluster struct {
 	    Name string `yaml:"name"`
 	    Nodes string `yaml:"nodes"`
 	    Domain string `yaml:"domain"`
+	    Cpu string `yaml:"cpus"`
+	    Memory string `yaml:"memory"`
+	    Disk string `yaml:"disk"`
 	}`yaml:"cluster"`
 	Clean string `yaml:"clean"`
     Minikube struct {
@@ -67,18 +73,21 @@ func readConf(filename string) (Config) {
        panic(err)
     }
     log.Println("Loading", filename)
-    color.Info.Tips("K8Provider : %s\n", config.K8s.Provider)
-    color.Info.Tips("ClusterDomain : %s\n", config.Cluster.Domain)
-    color.Info.Tips("ClusterName : %s\n", config.Cluster.Name)
-    log.Println("MinikubeInstall: ", config.Minikube.InstallCluster)
-    log.Println("MinikubeTest: ", config.Minikube.TestCluster)
-    log.Println("ColimaInstall: ", config.Colima.InstallCluster)
-    log.Println("ColimaTest: ", config.Colima.TestCluster)
-    log.Println("Clean: ", config.Clean)
-    log.Println("helmInstall: ", config.HelmInstall)
-    log.Println("certsSetup: ", config.CertsSetup)
-    log.Println("clusterNodes: ", config.Cluster.Nodes)
-    log.Println("K8s version: ", config.K8s.Version)
+    color.Info.Tips("K8Provider : %s", config.K8s.Provider)
+    color.Info.Tips("ClusterDomain : %s", config.Cluster.Domain)
+    color.Info.Tips("ClusterName : %s", config.Cluster.Name)
+   // color.Info.Tips("MinikubeInstall: ", config.Minikube.InstallCluster)
+   // log.Println("MinikubeTest: ", config.Minikube.TestCluster)
+   // log.Println("ColimaInstall: ", config.Colima.InstallCluster)
+   // log.Println("ColimaTest: ", config.Colima.TestCluster)
+   // log.Println("Clean: ", config.Clean)
+    //log.Println("helmInstall: ", config.HelmInstall)
+   // log.Println("certsSetup: ", config.CertsSetup)
+    color.Info.Tips("cluster - nodes: %s", config.Cluster.Nodes)
+    color.Info.Tips("cluster - cpu: %s", config.Cluster.Cpu)
+    color.Info.Tips("cluster - memory: %s", config.Cluster.Memory)
+    color.Info.Tips("cluster - disk: %s", config.Cluster.Disk)
+    color.Info.Tips("K8s version: %s", config.K8s.Version)
     return config
 }
 func configureTemplates(domain string) {
@@ -104,9 +113,9 @@ func configureTemplates(domain string) {
     buildClusterIssuer(m)
 
 }
-func startTunnel(){
-    color.Info.Tips("String minikube tunnel for profile",clusterName)
-    cmd := exec.Command("/bin/sh", "-c",fmt.Sprintf("minikube -p %s tunnel &",clusterName))
+func clearTunnel(){
+    color.Info.Tips("Clear minikube tunnel for profile",clusterName)
+    cmd := exec.Command("/bin/sh", "-c"," ps -eaf | grep 'tunnel' | grep -v 'grep' | awk '{print $2}' | xargs kill")
     cmd.Stdout = os.Stdout
     err := cmd.Start()
     if err != nil {
@@ -114,12 +123,29 @@ func startTunnel(){
     }
     log.Printf("Just ran subprocess %d, exiting\n", cmd.Process.Pid)
 }
+func startTunnel(){
+    color.Info.Tips("=========> Starting minikube tunnel for profile %s",clusterName)
+    cmdToExecute:=fmt.Sprintf("minikube -p %s tunnel -c &",clusterName)
+    cmd := exec.Command("/bin/sh", "-c",cmdToExecute)
+    cmd.Stdout = os.Stdout
+    err := cmd.Start()
+    if err != nil {
+        log.Fatal(err)
+    } else{
+        color.Info.Tips("Just ran subprocess",cmdToExecute)
+    }
+
+    log.Printf("Just ran subprocess %d, exiting\n", cmd.Process.Pid, )
+}
 func startK8sDashboard(){
+    cmdToExecute:=fmt.Sprintf("minikube -p %s dashboard &",clusterName)
     cmd := exec.Command("/bin/sh", "-c",fmt.Sprintf("minikube -p %s dashboard &",clusterName))
     cmd.Stdout = os.Stdout
     err := cmd.Start()
     if err != nil {
         log.Fatal(err)
+    } else{
+        color.Info.Tips("Just ran subprocess",cmdToExecute)
     }
     log.Printf("Just ran subprocess %d, exiting\n", cmd.Process.Pid)
 }
@@ -128,6 +154,9 @@ func main() {
     k8Provider=c.K8s.Provider
     clusterName=c.Cluster.Name
     clusterDomain=c.Cluster.Domain
+    clusterCpu=c.Cluster.Cpu
+    clusterMemory=c.Cluster.Memory
+    clusterDisk=c.Cluster.Disk
     clean=c.Clean
     helmInstall=c.HelmInstall
     certsSetup=c.CertsSetup
@@ -143,9 +172,7 @@ func main() {
         configureTemplates(clusterDomain)
         runShellScripts(certsSetup, "Setup cluster certs")
         runShellScripts(helmInstall, "Install Helm Components")
-
         runShellScripts(colimaTest, "Verify Cluster")
-        // cleanCreateColima()
         applyTraefikCerts()
         applyTraefik()
     } else if k8Provider == "minikube" {
@@ -153,29 +180,17 @@ func main() {
         minikubeTest=c.Minikube.TestCluster
         runShellScripts(minikubeInstall,fmt.Sprintf("Install Cluster %s", k8Provider))
         configureTemplates(clusterDomain)
-       // runBackgroundShellScript(fmt.Sprintf("minikube -p %s tunnel",clusterName),"Starting tunnel")
         runShellScripts(certsSetup, "Setup cluster certs")
+        //clearTunnel()
         startTunnel()
         runShellScripts(helmInstall, "Install Helm Components")
-//         configureTemplates(clusterDomain)
-        // startTunnel()
         applyTraefikCerts()
         applyTraefik()
         applyDashboard()
         runShellScripts(minikubeTest, "Verify Cluster")
-        //runBackgroundShellScript(fmt.Sprintf("minikube -p %s dashboard",clusterName), "start dashboard")
-
-        // cleanCreateMinikube()
-        // installDockerForMac()
     }else {
         color.Error.Println("K8Provider %s not supported", k8Provider)
     }
-
-     //installCerts()
- 	//installCerts()
-  	//applyNginxIngress()
- 	//applyTraefik()
-    //  	setupHosts()
 }
 func executeCommand(cmdToExecute string) {
     color.Error.Println("Running background shell script", cmdToExecute)
@@ -194,20 +209,22 @@ func runBackgroundShellScript(scripts string,label string){
 }
 func runShellScripts(scripts string,label string){
     color.Info.Tips("Executing ... %s" , label)
-    color.Info.Tips(scripts)
+    //color.Info.Tips(scripts)
     scanner := bufio.NewScanner(strings.NewReader(scripts))
     for scanner.Scan() {
         cmdToExecute := scanner.Text()
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_DOMAIN",clusterDomain,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NAME",clusterName,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NODES",clusterNodes,-1)
+        cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_DISK",clusterDisk,-1)
+        cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_CPU",clusterCpu,-1)
+        cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_MEMORY",clusterMemory,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$K8S_VERSION",k8sVersion,-1)
         color.Info.Tips("Executing command ... %s",  cmdToExecute)
         cmd := exec.Command("/bin/sh", "-c", cmdToExecute)
         out, err := cmd.Output()
         if err != nil {
             color.Error.Println("Failed to execute [" + cmdToExecute + "] - cause: " + fmt.Sprint(err) + " output: " + string(out))
-            //color.Error.Println("Failed to execute " + cmdToExecute + " cause:  ", err)
         }
         color.Info.Tips("Command output %s" , string(out))
     }
@@ -233,12 +250,7 @@ func cleanCreateMinikube(){
             clusterName,
             clusterDomain,
     }
-
     execute("./scripts/install-minikube.sh", command)
-//     listExistingMinikube()
-//     deleteExistingMinikube()
-//     installMinikube()
-
 }
 func cleanCreateColima(){
     color.Info.Tips("Cleaning %s", k8Provider)
@@ -470,18 +482,6 @@ func setupHosts(){
     }
     color.Notice.Println(string(out))
 }
-
-// func prepTemplates() error {
-//     const templateFile = "templates/template.yaml"
-//     const dataFile = "templates/values.yaml"
-//     const outputFile = "parsed.yaml"
-//     const targetDir = "parsed"
-//     if err := parser.Parse(templateFile, dataFile, outputFile,targetDir); err != nil {
-//         return err
-//     }
-//     fmt.Printf("File %s was generated.\n", outputFile)
-//     return nil
-// }
 
 func buildr(values map[string]string) error {
     const templateFile = "templates/resolver.yaml"

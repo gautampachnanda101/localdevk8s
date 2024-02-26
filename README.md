@@ -61,6 +61,8 @@ Run
 ```agsl
 make clean-install
 ```
+This can take a few minutes as we are spinning up a new cluster
+
 **You will be prompted for password a few times to configure certs and cluster**
 
 once cluster is running
@@ -78,3 +80,6 @@ clusterDomain: gautamlocalhost
 clusterName: gautam
 clusterNodes: 1
 ```
+
+### Caveats
+The currently implementation is only functional on minikube and mac os.

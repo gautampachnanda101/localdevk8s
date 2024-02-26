@@ -121,7 +121,7 @@ enableCertificateOwnerRef: false
 
 # Used to configure options for the controller pod.
 # This allows setting options that'd usually be provided via flags.
-# An APIVersion and Kind must be specified in your values.yaml file.
+# An APIVersion and Kind must be specified in your values2.yaml file.
 # Flags will override options that are set here.
 config:
 #   apiVersion: controller.config.cert-manager.io/v1alpha1
@@ -302,7 +302,7 @@ webhook:
 
   # Used to configure options for the webhook pod.
   # This allows setting options that'd usually be provided via flags.
-  # An APIVersion and Kind must be specified in your values.yaml file.
+  # An APIVersion and Kind must be specified in your values2.yaml file.
   # Flags will override options that are set here.
   config:
     # apiVersion: webhook.config.cert-manager.io/v1alpha1

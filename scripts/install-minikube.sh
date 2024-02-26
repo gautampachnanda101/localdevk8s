@@ -14,7 +14,7 @@ if [ -n "${argument[1]}" ]; then
 fi
 ctlptl delete cluster $CLUSTER_NAME --cascade true || true
 minikube delete --purge --all || true
-ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--driver=docker,--addons=ingress,ingress-dns,--install-addons=true"
+ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--driver=docker,--addons=ingress,metrics-server,dashboard,--install-addons=true"
 brew install chipmk/tap/docker-mac-net-connect || true
 sudo brew services start chipmk/tap/docker-mac-net-connect || true
 sudo brew services

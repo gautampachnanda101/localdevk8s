@@ -2,7 +2,10 @@
 cluster:
   domain: localhost
   name: local-dev
-  nodes: 1
+  nodes: 2
+  cpus: 4
+  memory: "8g"
+  disk: "20000mb"
 k8s:
   version: "v1.25.0"
   provider: minikube
@@ -26,6 +29,7 @@ certsSetup: |
   mkdir -p certs
   sudo mkcert -uninstall || true
   echo "Setting up certs for domain: $CLUSTER_DOMAIN"
+  echo "Creating Root Certs using mkcert for domain $CLUSTER_DOMAIN"
   sudo mkcert -install -cert-file certs/mkcert.pem -key-file certs/mkcert-key.pem "$CLUSTER_DOMAIN" 127.0.0.1 ::1
   echo "Setting up certs"
   sudo kubectl -n kube-system create secret tls mkcert --key certs/mkcert-key.pem --cert certs/mkcert.pem
@@ -47,11 +51,10 @@ certsSetup: |
   kubectl create namespace traefik || true
   sudo kubectl -n traefik create secret tls zerossl-ca --key certs/mkcert-key.pem --cert certs/mkcert.pem
   sudo kubectl -n kube-system create secret tls zerossl-ca --key certs/mkcert-key.pem --cert certs/mkcert.pem
-  minikube -p $CLUSTER_NAME addons list
-  minikube -p $CLUSTER_NAME addons enable ingress || true
+  minikube -p $CLUSTER_NAME addons enable dashboard || true
+  minikube -p $CLUSTER_NAME addons enable metrics-server || true
   minikube -p $CLUSTER_NAME addons disable ingress || true
   minikube -p $CLUSTER_NAME addons enable ingress || true
-  minikube -p $CLUSTER_NAME addons enable ingress-dns || true
   minikube -p $CLUSTER_NAME addons enable dashboard || true
   minikube -p $CLUSTER_NAME addons list
 helmInstall: |
@@ -59,10 +62,14 @@ helmInstall: |
   helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
   helm repo add argo-cd https://argoproj.github.io/argo-helm --force-update
   helm repo update
-  echo "Installing gitea"
-  helm install gitea gitea-charts/gitea --create-namespace --namespace gitea
-  helm dep update charts/argo-cd/
+  echo "Installing gitea"  
   helm repo add gitea-charts https://dl.gitea.com/charts/ --force-update
+  helm install gitea gitea-charts/gitea --create-namespace --namespace gitea --values ./charts/gitea/values.yaml
+  #helm install --dry-run --debug gitea oci://registry-1.docker.io/giteacharts/gitea --namespace gitea --create-namespace --values ./charts/gitea/values.yaml
+  #echo "Gitea Dry run done"
+  helm install gitea oci://registry-1.docker.io/giteacharts/gitea --namespace gitea --create-namespace --values ./charts/gitea/values.yaml
+  helm dep update charts/argo-cd/
+  helm install argocd argo-cd/argo-cd --create-namespace --namespace argocd --values ./charts/argo-cd/values.yaml
 colima:
   installCluster: |
     colima list | awk '{print $1}' | grep -v 'PROFILE' | xargs colima stop --force --profile || true
@@ -87,7 +94,7 @@ minikube:
     echo "Installing minikube"
     ctlptl delete cluster $CLUSTER_NAME --cascade true || true
     minikube delete --purge --all || true
-    ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--base-image=gcr.io/k8s-minikube/kicbase-builds:v0.0.42-1703092832-17830,--nodes=$CLUSTER_NODES,--kubernetes-version=$K8S_VERSION,--driver=docker,--install-addons=true,--addons=ingress,ingress-dns,registry,metrics-server,dashboard" --registry=ctlptl-registry
+    ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--base-image=gcr.io/k8s-minikube/kicbase-builds:v0.0.42-1703092832-17830,--nodes=$CLUSTER_NODES,--kubernetes-version=$K8S_VERSION,--cpus=$CLUSTER_CPU,--disk-size=$CLUSTER_DISK,--memory=$CLUSTER_MEMORY,--driver=docker,--install-addons=true,--addons=ingress,ingress-dns,registry,metrics-server,dashboard" --registry=ctlptl-registry
     minikube -p $CLUSTER_NAME addons list
     minikube -p $CLUSTER_NAME addons enable ingress || true
     brew install chipmk/tap/docker-mac-net-connect || true
@@ -103,5 +110,5 @@ minikube:
     sudo cat /etc/resolver/minikube-$CLUSTER_DOMAIN
     sudo brew services restart chipmk/tap/docker-mac-net-connect || true
     sudo brew services
-    MIP=$(minikube ip -p $CLUSTER_NAME);nslookup hello-john.$CLUSTER_DOMAIN $MIP
-    curl "hello-john.$CLUSTER_DOMAIN" || true
+    #MIP=$(minikube ip -p $CLUSTER_NAME);nslookup hello-john.$CLUSTER_DOMAIN $MIP
+    curl "https://hello-john.$CLUSTER_DOMAIN" || true
