@@ -111,11 +111,12 @@ func configureTemplates(domain string) {
     buildDashboardIngress(m)
     buildTestApp(m)
     buildClusterIssuer(m)
+    buildGiteaValues(m)
 
 }
 func clearTunnel(){
     color.Info.Tips("Clear minikube tunnel for profile",clusterName)
-    cmd := exec.Command("/bin/sh", "-c"," ps -eaf | grep 'tunnel' | grep -v 'grep' | awk '{print $2}' | xargs kill")
+    cmd := exec.Command("/bin/sh", "-c","ps -eaf | grep 'tunnel' | grep -v 'grep' | awk '{print $2}' | xargs kill")
     cmd.Stdout = os.Stdout
     err := cmd.Start()
     if err != nil {
@@ -124,7 +125,7 @@ func clearTunnel(){
     log.Printf("Just ran subprocess %d, exiting\n", cmd.Process.Pid)
 }
 func startTunnel(){
-    color.Info.Tips("=========> Starting minikube tunnel for profile %s",clusterName)
+    color.Info.Tips("Starting minikube tunnel for profile %s",clusterName)
     cmdToExecute:=fmt.Sprintf("minikube -p %s tunnel -c &",clusterName)
     cmd := exec.Command("/bin/sh", "-c",cmdToExecute)
     cmd.Stdout = os.Stdout
@@ -182,7 +183,7 @@ func main() {
         configureTemplates(clusterDomain)
         runShellScripts(certsSetup, "Setup cluster certs")
         //clearTunnel()
-        startTunnel()
+        //startTunnel()
         runShellScripts(helmInstall, "Install Helm Components")
         applyTraefikCerts()
         applyTraefik()
@@ -207,12 +208,11 @@ func runBackgroundShellScript(scripts string,label string){
     scriptToExecute:= scripts + " &"
     executeCommand(scriptToExecute)
 }
-func runShellScripts(scripts string,label string){
-    color.Info.Tips("Executing ... %s" , label)
-    //color.Info.Tips(scripts)
-    scanner := bufio.NewScanner(strings.NewReader(scripts))
-    for scanner.Scan() {
-        cmdToExecute := scanner.Text()
+func SplitLines(s string) []string {
+    var lines []string
+    sc := bufio.NewScanner(strings.NewReader(s))
+    for sc.Scan() {
+        cmdToExecute := sc.Text()
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_DOMAIN",clusterDomain,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NAME",clusterName,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NODES",clusterNodes,-1)
@@ -220,18 +220,54 @@ func runShellScripts(scripts string,label string){
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_CPU",clusterCpu,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_MEMORY",clusterMemory,-1)
         cmdToExecute = strings.Replace(cmdToExecute,"$K8S_VERSION",k8sVersion,-1)
-        color.Info.Tips("Executing command ... %s",  cmdToExecute)
-        cmd := exec.Command("/bin/sh", "-c", cmdToExecute)
-        out, err := cmd.Output()
+        lines = append(lines, cmdToExecute)
+    }
+    return lines
+}
+func runShellScripts(scripts string,label string){
+    color.Info.Tips("Executing ... %s" , label)
+    color.Info.Tips("Shell scripts ... %s" ,scripts)
+    //scanner := bufio.NewScanner(strings.NewReader(scripts))
+    var commands [] string
+     commands=SplitLines(scripts)
+//     color.Info.Tips("Shell scripts array... %s" ,commands)
+//
+//     for i := 0; i < len(commands); i++ {
+//             fmt.Println(commands[i])
+//      }
+//     index := 0
+//     for scanner.Scan() {
+//         cmdToExecute := scanner.Text()
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_DOMAIN",clusterDomain,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NAME",clusterName,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_NODES",clusterNodes,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_DISK",clusterDisk,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_CPU",clusterCpu,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$CLUSTER_MEMORY",clusterMemory,-1)
+//         cmdToExecute = strings.Replace(cmdToExecute,"$K8S_VERSION",k8sVersion,-1)
+//         //color.Info.Tips("Executing command ... %s %s",  cmdToExecute,index)
+//
+//         commands[index] = cmdToExecute
+//         index++
+//         //         cmd := exec.Command("/bin/sh", "-c", cmdToExecute)
+//         //         out, err := cmd.Output()
+//         //         if err != nil {
+//         //             color.Error.Println("Failed to execute [" + cmdToExecute + "] - cause: " + fmt.Sprint(err) + " output: " + string(out))
+//         //         }
+//         //         color.Info.Tips("Command output %s" , string(out))
+//     }
+    //
+    status, err := executeCommands(commands)
+    if status == false {
+        color.Error.Println("Failed to execute commands: " + fmt.Sprint(commands))
         if err != nil {
-            color.Error.Println("Failed to execute [" + cmdToExecute + "] - cause: " + fmt.Sprint(err) + " output: " + string(out))
+                color.Error.Printf("Error occurred: %v\n", err)
         }
-        color.Info.Tips("Command output %s" , string(out))
     }
+//     if err != nil {
+//         color.Error.Println("Failed to execute [" + commands + "] - cause: " + fmt.Sprint(err))
+//     }
 
-    if err := scanner.Err(); err != nil {
-        color.Error.Printf("Error occurred: %v\n", err)
-    }
      color.Info.Tips("Executing %s Completed", label)
 }
 
@@ -259,6 +295,26 @@ func cleanCreateColima(){
     installColima()
     listExistingColima()
 }
+func executeCommands(commands []string)(bool, error) {
+    for _,cmdToExecute := range commands {
+        color.Info.Tips("Executing Command %s" , cmdToExecute)
+        cmd := exec.Command("/bin/sh", "-c", cmdToExecute)
+        out, err := cmd.Output()
+        if err != nil {
+            color.Error.Println("Failed to execute [" + cmdToExecute + "] - cause: " + fmt.Sprint(err) + " output: " + string(out))
+        }
+        color.Info.Tips("Command output %s" , string(out))
+        if err != nil {
+                return false, err
+        }
+
+//         err = cmd.Wait()
+//         if err != nil {
+//             return false, err
+//         }
+   }
+   return true, nil
+}
 func execute(script string, command []string) (bool, error) {
     cmd := &exec.Cmd{
         Path:   script,
@@ -276,6 +332,7 @@ func execute(script string, command []string) (bool, error) {
 
     err = cmd.Wait()
     if err != nil {
+        cmd.Cancel()
         return false, err
     }
 
@@ -490,7 +547,7 @@ func buildr(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 func buildClusterIssuer(values map[string]string) error {
@@ -500,7 +557,7 @@ func buildClusterIssuer(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 
@@ -511,7 +568,7 @@ func buildTestApp(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 
@@ -522,7 +579,7 @@ func buildTraefikValues(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 
@@ -533,7 +590,7 @@ func buildTraefikCerts(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 func buildResolver(values map[string]string) error {
@@ -543,7 +600,7 @@ func buildResolver(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 
@@ -554,7 +611,19 @@ func buildDashboardIngress(values map[string]string) error {
     if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
         return err
     }
-    fmt.Printf("File %s was generated.\n", outputFile)
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
+    return nil
+}
+
+func buildGiteaValues(values map[string]string) error {
+    const templateFile = "templates/gitea.yaml"
+    const outputFile = "gitea.yaml"
+    const targetDir = "parsed"
+    if err := parser.ParseValues(templateFile, values, outputFile,targetDir); err != nil {
+        return err
+    }
+
+    fmt.Printf("File %s in dir %s was generated.\n", outputFile, targetDir)
     return nil
 }
 

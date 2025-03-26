@@ -1,11 +1,10 @@
-
 cluster:
   domain: localhost
   name: local-dev
   nodes: 2
-  cpus: 4
-  memory: "8g"
-  disk: "20000mb"
+  cpus: 6
+  memory: "12g"
+  disk: "10000mb"
 k8s:
   version: "v1.25.0"
   provider: minikube
@@ -64,10 +63,7 @@ helmInstall: |
   helm repo update
   echo "Installing gitea"  
   helm repo add gitea-charts https://dl.gitea.com/charts/ --force-update
-  helm install gitea gitea-charts/gitea --create-namespace --namespace gitea --values ./charts/gitea/values.yaml
-  #helm install --dry-run --debug gitea oci://registry-1.docker.io/giteacharts/gitea --namespace gitea --create-namespace --values ./charts/gitea/values.yaml
-  #echo "Gitea Dry run done"
-  helm install gitea oci://registry-1.docker.io/giteacharts/gitea --namespace gitea --create-namespace --values ./charts/gitea/values.yaml
+  helm install gitea gitea-charts/gitea --create-namespace --namespace gitea --values ./parsed/gitea.yaml
   helm dep update charts/argo-cd/
   helm install argocd argo-cd/argo-cd --create-namespace --namespace argocd --values ./charts/argo-cd/values.yaml
 colima:
@@ -97,6 +93,9 @@ minikube:
     ctlptl create cluster minikube --name $CLUSTER_NAME --minikube-start-flags="--base-image=gcr.io/k8s-minikube/kicbase-builds:v0.0.42-1703092832-17830,--nodes=$CLUSTER_NODES,--kubernetes-version=$K8S_VERSION,--cpus=$CLUSTER_CPU,--disk-size=$CLUSTER_DISK,--memory=$CLUSTER_MEMORY,--driver=docker,--install-addons=true,--addons=ingress,ingress-dns,registry,metrics-server,dashboard" --registry=ctlptl-registry
     minikube -p $CLUSTER_NAME addons list
     minikube -p $CLUSTER_NAME addons enable ingress || true
+    minikube -p $CLUSTER_NAME addons enable ingress-dns || true
+    minikube -p $CLUSTER_NAME addons enable storage-provisioner || true
+    brew uninstall chipmk/tap/docker-mac-net-connect || true
     brew install chipmk/tap/docker-mac-net-connect || true
     sudo brew services start chipmk/tap/docker-mac-net-connect || true
     sudo brew services
@@ -110,5 +109,6 @@ minikube:
     sudo cat /etc/resolver/minikube-$CLUSTER_DOMAIN
     sudo brew services restart chipmk/tap/docker-mac-net-connect || true
     sudo brew services
-    #MIP=$(minikube ip -p $CLUSTER_NAME);nslookup hello-john.$CLUSTER_DOMAIN $MIP
+    scutil --dns
+    MIP=$(minikube ip -p $CLUSTER_NAME);nslookup hello-john.$CLUSTER_DOMAIN $MIP
     curl "https://hello-john.$CLUSTER_DOMAIN" || true

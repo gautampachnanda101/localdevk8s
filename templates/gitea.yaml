@@ -160,19 +160,21 @@ service:
 ingress:
   enabled: true
   # className: nginx
-  className:
+#  className:
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: gitea.localhost
-    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    external-dns.alpha.kubernetes.io/hostname: gitea.{{ .Domain }}
+    kubernetes.io/ingress.class: traefik
+    cert-manager.io/cluster-issuer: zerossl-issuer
+    cert-manager.io/common-name: git.{{ .Domain }}
   hosts:
-    - host: git.localhost
+    - host: git.{{ .Domain }}
       paths:
         - path: /
           pathType: Prefix
   tls:
     - secretName: gitea-tls
       hosts:
-        - gitea.localhost
+        - gitea.{{ .Domain }}
   # Mostly for argocd or any other CI that uses `helm template | kubectl apply` or similar
   # If helm doesn't correctly detect your ingress API version you can set it here.
   # apiVersion: networking.k8s.io/v1

@@ -1,4 +1,4 @@
 domain {{ .Domain }}
 nameserver {{ .Ip }}
-search_order 11
+search_order 1
 timeout 5

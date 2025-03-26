@@ -1,8 +1,6 @@
 dashboard:
   enabled: true
   domain: traefik.{{ .Domain }}
-hub:
-  enabled: true
 serversTransport:
   insecureSkipVerify: true
 ssl:
